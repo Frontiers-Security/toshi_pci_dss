@@ -254,12 +254,12 @@
                                 "content" : { "Fn::Join" : ["", [
                                     "#!/bin/bash\n\n",
                                     "PRIVATE_IP=`curl http://169.254.169.254/latest/meta-data/local-ipv4/`\n",
-                                    "mongo --host router1.toshipci.dss:27019 --eval 'sh.addShard(\"$PRIVATE_IP\")' \n",
+                                    "mongo --host router1.toshipci.dss:27019 --eval 'sh.addShard(\"$PRIVATE_IP\")' \n"
                                 ] ] },
                                 "mode"    : "000777",
                                 "owner"   : "root",
-                                "group"   : "root"                                
-                            }  
+                                "group"   : "root"                      
+                            }
                         }
                     }
                 }

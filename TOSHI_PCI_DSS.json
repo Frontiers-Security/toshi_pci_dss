@@ -35,6 +35,37 @@
             "ConstraintDescription" : "must be a valid EC2 instance type."
         },
         
+        "MongoInstanceType" : {
+            "Description" : "EC2 instance type",
+            "Type" : "String",
+            "Default" : "m3.medium",
+            "AllowedValues" : [ "t2.micro",
+                                "t2.small",
+                                "t2.medium",
+                                "t2.large",
+                                "m3.medium",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        
+        "CoreNodesInstanceType" : {
+            "Description" : "Core nodes instance type",
+            "Type" : "String",
+            "Default" : "m4.large",
+            "AllowedValues" : [
+                                "m4.large",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        
         "MongoVolumeSize" : {
             "Type" : "Number",
             "MinValue" : "1",
@@ -329,22 +360,38 @@
             }
         },
         
-        "MongoCluster" : {
+        "CoreNodes" : {
             "Type" : "AWS::CloudFormation::Stack",
-            "DependsOn" : "BastionVPCPeeringConnection",
             "Properties" : {
-                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/toshi.json",
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/core_node.json",
                 "Parameters" : {
                     "KeyName" : { "Ref" : "KeyName" },
-                    "InstanceType" : { "Ref" : "InstanceType" },
-                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },                   
+                    "InstanceType" : { "Ref" : "CoreNodesInstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "OperatorEMail" : { "Ref" : "OperatorEMail" },
                     "ToshiVPC" : { "Ref" : "ToshiVPC" },
-                    "SubnetCIDR" : "10.14.85.0/24",
+                    "SubnetCIDR" : "10.14.7.0/24",
                     "NatGatewayId" : { "Ref" : "ToshiVPCNAT" },
                     "BastionVPCPeeringConnection" : {"Ref": "BastionVPCPeeringConnection"}
                 }
             }
-        }       
+        },
+        
+        "MongoCluster" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.cluster.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "MongoInstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "ToshiVPC" : { "Ref" : "ToshiVPC" },
+                    "SubnetCIDR" : "10.14.47.0/24",
+                    "NatGatewayId" : { "Ref" : "ToshiVPCNAT" },
+                    "BastionVPCPeeringConnection" : {"Ref": "BastionVPCPeeringConnection"}
+                }
+            }
+        }
 
     },
 
