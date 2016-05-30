@@ -1,0 +1,228 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "toshipci.dss mongodb cluster",
+    "Parameters" : {
+        "InstanceType" : {
+            "Description" : "EC2 instance type",
+            "Type" : "String",
+            "Default" : "t2.micro",
+            "AllowedValues" : [ "t2.micro",
+                                "t2.small",
+                                "t2.medium",
+                                "t2.large",
+                                "m3.medium",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        "MongoVolumeSize" : {
+            "Type" : "Number",
+            "MinValue" : "1",
+            "Default"  : "10",
+            "ConstraintDescription" : "GB"
+        },
+        "KeyName" : {
+            "Description" : "Please, generate a key pair first, if you don't have them.",
+            "Type" : "AWS::EC2::KeyPair::KeyName",
+            "MinLength" : "2",
+            "ConstraintDescription" : "must be the name of an existing EC2 KeyPair",
+            "Default"  : "hello_and_wellcome"
+        },
+        "ToshiVPC" : {
+            "Type" : "String"
+        },
+        "NatGatewayId" : {		
+			"Type": "String"		
+		},
+        "SubnetCIDR" : {
+            "Type" : "String"
+        },
+        "BastionVPCPeeringConnection" : {          
+            "Type" : "String"
+        }       
+    },
+    "Mappings" : {
+        "InstanceLabel2Type" : {
+            "t2.micro"  : { "Type" : "t2.micro" },
+            "t2.small"  : { "Type" : "t2.small" },
+            "t2.medium" : { "Type" : "t2.medium" },
+            "t2.large"  : { "Type" : "t2.large" },
+            "m3.medium" : { "Type" : "m3.medium" },
+            "m4.large"   : { "Type" : "m4.large" },
+            "m4.xlarge"   : { "Type" : "m4.xlarge" },
+            "m4.2xlarge"  : { "Type" : "m4.2xlarge" },
+            "m4.4xlarge"  : { "Type" : "m4.4xlarge" },
+            "m4.10xlarge" : { "Type" : "m4.10xlarge" }
+        },
+        "AWSInstanceType2Arch" : {
+            "t2.micro"  : { "Arch" : "64HVM" },
+            "t2.small"  : { "Arch" : "64HVM" },
+            "t2.medium" : { "Arch" : "64HVM" },
+            "t2.large"  : { "Arch" : "64HVM" },
+            "m3.medium" : { "Arch" : "64HVM" },
+            "m4.large"   : { "Arch" : "64HVM" },
+            "m4.xlarge"   : { "Arch" : "64HVM" },
+            "m4.2xlarge"  : { "Arch" : "64HVM" },
+            "m4.4xlarge"  : { "Arch" : "64HVM" },
+            "m4.10xlarge" : { "Arch" : "64HVM" }
+        },
+        "AWSRegionArch2AMI" : {
+            "us-east-1"      : { "64" : "ami-d85e75b0", "64HVM" : "ami-d05e75b8" },
+            "us-west-2"      : { "64" : "ami-6989a659", "64HVM" : "ami-5189a661" },
+            "us-west-1"      : { "64" : "ami-d16a8b95", "64HVM" : "ami-df6a8b9b" },
+            "eu-west-1"      : { "64" : "ami-5da23a2a", "64HVM" : "ami-47a23a30" },
+            "eu-central-1"   : { "64" : "ami-b6cff2ab", "64HVM" : "ami-accff2b1" },
+            "ap-southeast-1" : { "64" : "ami-e8f1c1ba", "64HVM" : "ami-96f1c1c4" },
+            "ap-northeast-1" : { "64" : "ami-936d9d93", "64HVM" : "ami-8d6d9d8d" },
+            "ap-southeast-2" : { "64" : "ami-7163104b", "64HVM" : "ami-69631053" },
+            "sa-east-1"      : { "64" : "ami-55883348", "64HVM" : "ami-4d883350" }
+        }
+    },
+    "Resources" : {
+        
+        "InstanceSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : ".",
+                "SecurityGroupIngress" : [ {
+                    "IpProtocol" : "tcp",
+                    "FromPort"   : "22",
+                    "ToPort"     : "22",
+                    "CidrIp"     : "0.0.0.0/0"
+                },
+                {
+                    "IpProtocol" : "tcp",
+                    "FromPort"   : "80",
+                    "ToPort"     : "80",
+                    "CidrIp"     : "0.0.0.0/0"
+                },
+                {
+                    "IpProtocol" : -1,
+                    "FromPort"   : "27000",
+                    "ToPort"     : "28000",
+                    "CidrIp"     : "0.0.0.0/0"
+                } ],
+                "VpcId" : { "Ref" : "ToshiVPC" }
+            }
+        },   
+        
+        "PrivateSubnet" : {
+           "Type" : "AWS::EC2::Subnet",
+           "Properties" : {
+                "CidrBlock" : {
+                    "Ref": "SubnetCIDR"
+                },
+                "VpcId" : { "Ref" : "ToshiVPC" }
+           }
+        },           
+        
+        "PrivateSubnetRouteTable" : {
+           "Type" : "AWS::EC2::RouteTable",
+           "Properties" : {
+              "VpcId" : { "Ref" : "ToshiVPC" }
+           }
+        },
+        
+        "PrivateSubnetRouteTableAssociation" : {
+           "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+           "Properties" : {
+              "RouteTableId" : { "Ref" : "PrivateSubnetRouteTable" },
+              "SubnetId" : { "Ref" : "PrivateSubnet" }
+           }
+        },          
+               
+        "RouteToNAT" : {
+          "Type" : "AWS::EC2::Route",
+          "Properties" : {
+            "RouteTableId" : { "Ref" : "PrivateSubnetRouteTable" },
+            "DestinationCidrBlock" : "0.0.0.0/0",
+            "NatGatewayId" : { "Ref" : "NatGatewayId" }
+          }
+        },         
+        
+        "RouteToBastion" : {
+          "Type" : "AWS::EC2::Route",
+          "Properties" : {
+            "RouteTableId" : { "Ref" : "PrivateSubnetRouteTable" },
+            "DestinationCidrBlock" : "172.31.0.0/16",            
+            "VpcPeeringConnectionId" : { "Ref" : "BastionVPCPeeringConnection" }
+          }
+        },                    
+                                                
+        "ProappServerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "RetentionInDays": 7
+            }
+        },
+        
+        "ProHostedZone" : {
+          "Type" : "AWS::Route53::HostedZone",
+          "Properties" : {            
+            "Name" : "toshipci.dss",
+            "VPCs" : [ 
+                {
+                  "VPCId": { "Ref" : "ToshiVPC" },
+                  "VPCRegion": { "Ref" : "AWS::Region" }
+                }
+            ]
+          }
+        },
+                
+        "MongoConfigServer" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "ProHostedZone",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.config.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "1"
+                }
+            }
+        },        
+        
+        "MongoRouterServer" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "MongoConfigServer",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.router.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "1"
+                }
+            }
+        },      
+          
+        "MongoShardServer1" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "MongoRouterServer",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.shard.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "1"
+                }
+            }
+        }
+        
+    },
+
+    "Outputs" : {
+
+    }
+}
