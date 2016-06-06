@@ -58,6 +58,11 @@
         
         "BastionVPCPeeringConnection" : {          
             "Type" : "String"
+        },
+        
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
         }
     },
     "Mappings" : {
@@ -403,6 +408,17 @@
                                             "  --resource LaunchConfig ",
                                             "  --region ", { "Ref" : "AWS::Region" }, "\n",
                                             "runas=root\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            
+                            "/tmp/dns_zone_name.txt": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            { "Ref" : "DNSZone" }
                                         ]
                                     ]
                                 }

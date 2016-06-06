@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion" : "2010-09-09",
-    "Description" : "Config Shard",
+    "Description" : "MongoDB Shard",
     "Parameters" : {
         "InstanceType" : {
             "Description" : "EC2 instance type",
@@ -25,7 +25,16 @@
         "ServerId" : {
             "Description" : "ServerId",
             "Type" : "String"
+        },
+        "LogGroup" : {
+            "Description" : "Cluster Log Group Name",
+            "Type" : "String"
+        },
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
         } 
+        
     },
     "Mappings" : {
         "InstanceLabel2Type" : {
@@ -189,14 +198,7 @@
                 }]
             }
         },
-        
-        "ProappServerLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "RetentionInDays": 7
-            }
-        },
-                
+                        
         "ConfigInstance" : {
             "Type" : "AWS::EC2::Instance",
             "Metadata" : {
@@ -212,15 +214,10 @@
                                         [
                                             "[general]\n",
                                             "state_file= /var/awslogs/agent-state\n", "\n",
-                                            "[proapp_api]\n",
-                                            "file = /home/ubuntu/proapp_api.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api\n",
-                                            "datetime_format = %d/%b/%Y:%H:%M:%S", "\n", "\n",
-                                            "[proapp_api_error]\n",
-                                            "file = /home/ubuntu/proapp_api.error.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api_error\n",
+                                            "[mongo_log]\n",
+                                            "file = /var/log/mongodb_process.log \n",
+                                            "log_group_name = ", {"Ref": "LogGroup"}, "\n",
+                                            "log_stream_name = mongodb_config_", { "Ref" : "ServerId" }, "\n",
                                             "datetime_format = %d/%b/%Y:%H:%M:%S", "\n"
                                         ]
                                     ]
@@ -496,9 +493,9 @@
         "DNSRecord" : {
             "Type" : "AWS::Route53::RecordSet",            
             "Properties" : {
-                "HostedZoneName" : { "Fn::Join" : [ "", ["toshipci.dss", "." ]]},
+                "HostedZoneName" : { "Fn::Join" : [ "", [{ "Ref" : "DNSZone" }, "." ]]},
                 "Comment" : "DNS pro",
-                "Name" : { "Fn::Join" : [ "", [ "config", { "Ref" : "ServerId" }, ".", "toshipci.dss", "."]]},
+                "Name" : { "Fn::Join" : [ "", [ "config", { "Ref" : "ServerId" }, ".", { "Ref" : "DNSZone" }, "."]]},
                 "Type" : "A",
                 "TTL" : "900",
                 "ResourceRecords" : [ { "Fn::GetAtt" : [ "ConfigInstance", "PrivateIp" ] } ]

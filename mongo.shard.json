@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion" : "2010-09-09",
-    "Description" : "Cluster Shard",
+    "Description" : "MongoDB Shard",
     "Parameters" : {
         "InstanceType" : {
             "Description" : "EC2 instance type",
@@ -25,7 +25,15 @@
         "ServerId" : {
             "Description" : "ServerId",
             "Type" : "String"
-        } 
+        },
+        "LogGroup" : {
+            "Description" : "Cluster Log Group Name",
+            "Type" : "String"
+        },
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
+        }
     },
     "Mappings" : {
         "InstanceLabel2Type" : {
@@ -181,13 +189,6 @@
             }
         },
         
-        "ProappServerLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "RetentionInDays": 7
-            }
-        },
-
         "ShardInstance" : {
             "Type" : "AWS::EC2::Instance",
             "Metadata" : {
@@ -202,16 +203,11 @@
                                         [
                                             "[general]\n",
                                             "state_file= /var/awslogs/agent-state\n", "\n",
-                                            "[proapp_api]\n",
-                                            "file = /home/ubuntu/proapp_api.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api\n",
-                                            "datetime_format = %d/%b/%Y:%H:%M:%S", "\n", "\n",
-                                            "[proapp_api_error]\n",
-                                            "file = /home/ubuntu/proapp_api.error.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api_error\n",
-                                            "datetime_format = %d/%b/%Y:%H:%M:%S", "\n"
+                                            "[mongodb_log]\n",
+                                            "file = /log/mongodb.log \n",
+                                            "log_group_name = ", {"Ref": "LogGroup"}, "\n",
+                                            "log_stream_name = mongodb_shard_", { "Ref" : "ServerId" }, "\n",
+                                            "datetime_format = %d/%b/%Y:%H:%M:%S", "\n", "\n"
                                         ]
                                     ]
                                 }
@@ -254,9 +250,9 @@
                                 "content" : { "Fn::Join" : ["", [
                                     "#!/bin/bash\n\n",
                                     "PRIVATE_IP=`curl http://169.254.169.254/latest/meta-data/local-ipv4/`\n",
-                                    "mongo --host router1.toshipci.dss:27019 --eval 'sh.addShard(\"$PRIVATE_IP\")' \n"
+                                    "mongo --host router1.", { "Ref" : "DNSZone" }, ":27017 --eval \"sh.addShard('$PRIVATE_IP')\" \n"
                                 ] ] },
-                                "mode"    : "000777",
+                                "mode"    : "000700",
                                 "owner"   : "root",
                                 "group"   : "root"                      
                             }
@@ -356,18 +352,18 @@
                     "bind_ip = 0.0.0.0\n",
                     "journal=true\n",                   
                     "\n",
-                    "EOF\n",
-                    
-                    "/tmp/private.ip ./",                                        
-
+                    "EOF\n",                    
+                                 
                     "## Start mongod\n",
-                    "service mongodb start > /tmp/mongod-start.log 2>&1\n",
+                    "service mongodb start > /tmp/mongod-start.log 2>&1 \n",
 
                     "echo '", { "Ref" : "AWS::StackName" }, "' > /tmp/aws_init_name.txt \n",
                     "echo '", { "Ref" : "AWS::Region" }, "' > /tmp/aws_init_region.txt \n", 
 
                     "## Waiting until mongod has started\n",
-                    "sleep 30\n",                                
+                    "sleep 120\n",    
+                    
+                    "/tmp/private.ip > /tmp/ip_report.log \n",                                   
 
                     "/usr/local/bin/cfn-signal -e $? ",
                     "         --stack ", { "Ref" : "AWS::StackName" },
@@ -392,8 +388,6 @@
             }
         },
         
-
-
         "MongoVolume1": {
           "Type": "AWS::EC2::Volume",
           "Properties": {

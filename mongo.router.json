@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion" : "2010-09-09",
-    "Description" : "Cluster Router",
+    "Description" : "MongoDB Router",
     "Parameters" : {
         "InstanceType" : {
             "Description" : "EC2 instance type",
@@ -25,7 +25,15 @@
         "ServerId" : {
             "Description" : "ServerId",
             "Type" : "String"
-        }       
+        },
+        "LogGroup" : {
+            "Description" : "Cluster Log Group Name",
+            "Type" : "String"
+        },
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
+        } 
     },
     "Mappings" : {
         "InstanceLabel2Type" : {
@@ -180,13 +188,6 @@
                 }]
             }
         },
-        
-        "ProappServerLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "RetentionInDays": 7
-            }
-        },
 
         "RouterInstance" : {
             "Type" : "AWS::EC2::Instance",
@@ -202,15 +203,10 @@
                                         [
                                             "[general]\n",
                                             "state_file= /var/awslogs/agent-state\n", "\n",
-                                            "[proapp_api]\n",
-                                            "file = /home/ubuntu/proapp_api.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api\n",
-                                            "datetime_format = %d/%b/%Y:%H:%M:%S", "\n", "\n",
-                                            "[proapp_api_error]\n",
-                                            "file = /home/ubuntu/proapp_api.error.log\n",
-                                            "log_group_name = ", {"Ref": "ProappServerLogGroup"}, "\n",
-                                            "log_stream_name = proapp_api_error\n",
+                                            "[mongo_log]\n",
+                                            "file = /var/log/mongos_process.log \n",
+                                            "log_group_name = ", {"Ref": "LogGroup"}, "\n",
+                                            "log_stream_name = mongodb_router_", { "Ref" : "ServerId" }, "\n",
                                             "datetime_format = %d/%b/%Y:%H:%M:%S", "\n"
                                         ]
                                     ]
@@ -348,7 +344,7 @@
                     "EOF\n",
 
                     "## Start config server \n",
-                    "nohup mongos --configdb config1.toshipci.dss:27019 > /var/log/mongodb_process.log \n",
+                    "nohup mongos --configdb config1.", { "Ref": "DNSZone" }, ":27019,config2.", { "Ref": "DNSZone" }, ":27019,config3.", { "Ref": "DNSZone" }, ":27019 > /var/log/mongos_process.log \n",
 
                     "echo '", { "Ref" : "AWS::StackName" }, "' > /tmp/aws_init_name.txt \n",
                     "echo '", { "Ref" : "AWS::Region" }, "' > /tmp/aws_init_region.txt \n", 
@@ -485,11 +481,11 @@
         },
         
         "DNSRecord" : {
-            "Type" : "AWS::Route53::RecordSet",            
+            "Type" : "AWS::Route53::RecordSet", 
             "Properties" : {
-                "HostedZoneName" : { "Fn::Join" : [ "", ["toshipci.dss", "." ]]},
-                "Comment" : "DNS pro",
-                "Name" : { "Fn::Join" : [ "", [ "router", { "Ref" : "ServerId" }, ".", "toshipci.dss", "."]]},
+                "HostedZoneName" : { "Fn::Join" : [ "", [{ "Ref" : "DNSZone" }, "." ]]},
+                "Comment" : "DNS toshi",
+                "Name" : { "Fn::Join" : [ "", [ "router", { "Ref" : "ServerId" }, ".", { "Ref" : "DNSZone" }, "."]]},
                 "Type" : "A",
                 "TTL" : "900",
                 "ResourceRecords" : [ { "Fn::GetAtt" : [ "RouterInstance", "PrivateIp" ] } ]
@@ -498,6 +494,8 @@
     },
 
     "Outputs" : {
-
+        "routerIp": {
+			"Value": { "Fn::GetAtt" : [ "RouterInstance", "PrivateIp" ] }
+		}
     }
 }

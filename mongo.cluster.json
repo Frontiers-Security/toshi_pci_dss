@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion" : "2010-09-09",
-    "Description" : "toshipci.dss mongodb cluster",
+    "Description" : "toshi pci dss mongodb cluster",
     "Parameters" : {
         "InstanceType" : {
             "Description" : "EC2 instance type",
@@ -42,7 +42,11 @@
         },
         "BastionVPCPeeringConnection" : {          
             "Type" : "String"
-        }       
+        },
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
+        }
     },
     "Mappings" : {
         "InstanceLabel2Type" : {
@@ -151,30 +155,16 @@
             "VpcPeeringConnectionId" : { "Ref" : "BastionVPCPeeringConnection" }
           }
         },                    
-                                                
-        "ProappServerLogGroup": {
+    
+        "MongoClusterLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "RetentionInDays": 7
             }
         },
-        
-        "ProHostedZone" : {
-          "Type" : "AWS::Route53::HostedZone",
-          "Properties" : {            
-            "Name" : "toshipci.dss",
-            "VPCs" : [ 
-                {
-                  "VPCId": { "Ref" : "ToshiVPC" },
-                  "VPCRegion": { "Ref" : "AWS::Region" }
-                }
-            ]
-          }
-        },
-                
-        "MongoConfigServer" : {
+                                
+        "MongoConfigServer1" : {
             "Type" : "AWS::CloudFormation::Stack",
-            "DependsOn" : "ProHostedZone",
             "Properties" : {
                 "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.config.json",
                 "Parameters" : {
@@ -183,14 +173,50 @@
                     "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
                     "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
                     "SubnetId" : { "Ref" : "PrivateSubnet" },
-                    "ServerId" : "1"
+                    "ServerId" : "1",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }   
+                }
+            }
+        },
+        
+        "MongoConfigServer2" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.config.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "2",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }   
+                }
+            }
+        },     
+        
+        "MongoConfigServer3" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.config.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "3",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }   
                 }
             }
         },        
-        
-        "MongoRouterServer" : {
+               
+        "MongoRouterServer1" : {
             "Type" : "AWS::CloudFormation::Stack",
-            "DependsOn" : "MongoConfigServer",
+            "DependsOn" : ["MongoConfigServer1", "MongoConfigServer2", "MongoConfigServer3"],
             "Properties" : {
                 "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.router.json",
                 "Parameters" : {
@@ -199,14 +225,34 @@
                     "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
                     "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
                     "SubnetId" : { "Ref" : "PrivateSubnet" },
-                    "ServerId" : "1"
+                    "ServerId" : "1",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }   
                 }
             }
         },      
+        
+        "MongoRouterServer2" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : ["MongoConfigServer1", "MongoConfigServer2", "MongoConfigServer3"],
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.router.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "2",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }   
+                }
+            }
+        },
           
         "MongoShardServer1" : {
             "Type" : "AWS::CloudFormation::Stack",
-            "DependsOn" : "MongoRouterServer",
+            "DependsOn" : ["MongoRouterServer1", "MongoRouterServer2"],
             "Properties" : {
                 "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.shard.json",
                 "Parameters" : {
@@ -215,10 +261,52 @@
                     "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
                     "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
                     "SubnetId" : { "Ref" : "PrivateSubnet" },
-                    "ServerId" : "1"
+                    "ServerId" : "1",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" }
                 }
             }
-        }
+        },
+        
+        "MongoShardServer2" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : ["MongoRouterServer1", "MongoRouterServer2"],
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.shard.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },
+                    "InstanceSecurityGroup": { "Ref" : "InstanceSecurityGroup" },
+                    "SubnetId" : { "Ref" : "PrivateSubnet" },
+                    "ServerId" : "2",
+                    "LogGroup" : { "Ref" : "MongoClusterLogGroup" },
+                    "DNSZone" : { "Ref" : "DNSZone" } 
+                }
+            }
+        },
+        
+        "DNSRecordsSet" : {
+            "Type" : "AWS::Route53::RecordSetGroup",
+            "Properties" : {
+                "HostedZoneName" : { "Fn::Join" : ["", [ { "Ref" : "DNSZone" }, "." ]] },
+                "RecordSets" : [
+                    {
+                        "Name" : { "Fn::Join" : ["", [ "routers_set.", { "Ref" : "DNSZone" }, "." ]] },
+                        "Type" : "A",
+                        "TTL" : "900",
+                        "SetIdentifier" : "Mongodb routers",
+                        "Weight" : "4",
+                        "ResourceRecords" : [{
+                		  "Fn::GetAtt": ["MongoRouterServer1", "Outputs.routerIp"]
+                		},
+                        {
+                		  "Fn::GetAtt": ["MongoRouterServer2", "Outputs.routerIp"]
+                		}]
+                    }
+                ]     
+            }
+        }          
         
     },
 

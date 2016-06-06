@@ -1,0 +1,378 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "TOSHI PCI DSS",
+    "Parameters" : {
+        
+        "CidrBlock" : {
+            "Type" : "String",
+            "Default"  : "10.14.0.0/16"  
+        },        
+        "AvailabilityZoneA": {
+            "Description": "Availability Zone 1",
+            "Type": "AWS::EC2::AvailabilityZone::Name",
+            "Default"  : "eu-west-1a"
+        },
+        "AvailabilityZoneB": {
+            "Description": "Availability Zone 2",
+            "Type": "AWS::EC2::AvailabilityZone::Name",
+            "Default"  : "eu-west-1b"
+        },
+        
+        "InstanceType" : {
+            "Description" : "EC2 instance type",
+            "Type" : "String",
+            "Default" : "t2.micro",
+            "AllowedValues" : [ "t2.micro",
+                                "t2.small",
+                                "t2.medium",
+                                "t2.large",
+                                "m3.medium",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        
+        "MongoInstanceType" : {
+            "Description" : "EC2 instance type",
+            "Type" : "String",
+            "Default" : "t2.micro",
+            "AllowedValues" : [ "t2.micro",
+                                "t2.small",
+                                "t2.medium",
+                                "t2.large",
+                                "m3.medium",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        
+        "CoreNodesInstanceType" : {
+            "Description" : "Core nodes instance type",
+            "Type" : "String",
+            "Default" : "m4.large",
+            "AllowedValues" : [
+                                "m4.large",
+                                "m4.xlarge",
+                                "m4.2xlarge",
+                                "m4.4xlarge",
+                                "m4.10xlarge"
+                                ],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+        },
+        
+        "MongoVolumeSize" : {
+            "Type" : "Number",
+            "MinValue" : "1",
+            "Default"  : "10",
+            "ConstraintDescription" : "GB"
+        },
+        
+        "KeyName" : {
+            "Description" : "Please, generate a key pair first, if you don't have them.",
+            "Type" : "AWS::EC2::KeyPair::KeyName",
+            "MinLength" : "2",
+            "ConstraintDescription" : "must be the name of an existing EC2 KeyPair",
+            "Default"  : "hello_and_wellcome"
+        },
+        
+        "OperatorEMail": {
+            "Description": "Email address to notify if there are any scaling operations",
+            "Type": "String",
+            "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+            "ConstraintDescription": "must be a valid email address.",
+            "Default"  : "sugarhillmountain@gmail.com"
+        },
+        
+        "PeerVPC" : {
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        
+        "DNSZone" : {
+            "Type" : "String",
+            "Default"  : "toshi.pcidss"  
+        },
+        
+        "RepositoryName" : {
+            "Type" : "String",
+            "Default"  : "toshi_pcidss"  
+        }
+        
+    },
+    
+    "Resources" : {
+        
+        "ToshiVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": { "Ref" : "CidrBlock" },
+                "EnableDnsSupport" : "true",
+	            "EnableDnsHostnames" : "true"            
+            }
+        },
+        
+        "SecurityGroupVpcNat": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Allow NAT from production",
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": "80",
+					"ToPort": "80",
+					"CidrIp": {
+						"Ref": "CidrBlock"
+					}
+				}, {
+					"IpProtocol": "tcp",
+					"FromPort": "443",
+					"ToPort": "443",
+					"CidrIp": {
+						"Ref": "CidrBlock"
+					}
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "sg-web-access-ports-from-production"
+				}]
+			}
+		},
+        
+		"DMZSubnetA": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.10.0/24",
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZoneA"
+				},
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "DMZ Subnet A"
+				}]
+			}
+		},        
+        
+		"DMZSubnetB": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.20.0/24",
+				"AvailabilityZone": {
+				    "Ref":"AvailabilityZoneB"
+                },
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Production DMZ Subnet B"
+				}]
+			}
+		},       
+        
+		"AppPrivateSubnetA": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.96.0/21",
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZoneA"
+				},
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Production App Subnet A"
+				}]
+			}
+		},
+        
+		"AppPrivateSubnetB": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.119.0/21",
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZoneB"
+				},
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Production App Subnet B"
+				}]
+			}
+		},
+        
+		"MongoPrivateSubnetA": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.194.0/21",
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZoneA"
+				},
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Production DB Subnet A"
+				}]
+			}
+		},
+        
+		"MongoPrivateSubnetB": {
+			"Type": "AWS::EC2::Subnet",
+			"Properties": {
+				"CidrBlock": "10.14.212.0/21",
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZoneB"
+				},
+				"VpcId": {
+					"Ref": "ToshiVPC"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "Production DB Subnet B"
+				}]
+			}
+		},
+        
+        "PublicSubnet" : {
+           "Type" : "AWS::EC2::Subnet",
+           "Properties" : {
+              "CidrBlock" : "10.14.110.0/24",
+              "VpcId" : { "Ref" : "ToshiVPC" }
+           }
+        },
+        
+        "PublicSubnetRouteTable" : {
+           "Type" : "AWS::EC2::RouteTable",
+           "Properties" : {
+              "VpcId" : { "Ref" : "ToshiVPC" }
+           }
+        },
+        
+        "PublicSubnetRouteTableAssociation" : {
+           "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+           "Properties" : {
+              "RouteTableId" : { "Ref" : "PublicSubnetRouteTable" },
+              "SubnetId" : { "Ref" : "PublicSubnet" }
+           }
+        },
+        
+        "InternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+                "Properties" : {
+                    "Tags" : [ {"Key" : "Name", "Value" : "ProInternetGateway"}]
+            }
+        },
+
+        "InternetGatewayAttachment" : {
+           "Type" : "AWS::EC2::VPCGatewayAttachment",
+           "Properties" : {
+              "VpcId" : { "Ref" : "ToshiVPC" },
+              "InternetGatewayId" : { "Ref" : "InternetGateway" }
+           }
+        },
+
+        "PublicSubnetToInternetGateway" : {
+            "Type" : "AWS::EC2::Route",
+            "Properties" : {
+                "RouteTableId" : { "Ref" : "PublicSubnetRouteTable" },
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "GatewayId" : { "Ref" : "InternetGateway" }
+            }
+        },   
+        
+        "ProEIP" : {
+          "Type" : "AWS::EC2::EIP",
+          "Properties" : {
+            "Domain" : "vpc"
+          }
+        },    
+                        
+        "ToshiVPCNAT" : {
+          "DependsOn" : "InternetGatewayAttachment",
+          "Type" : "AWS::EC2::NatGateway",
+          "Properties" : {
+            "AllocationId" : { "Fn::GetAtt" : ["ProEIP", "AllocationId"]},
+            "SubnetId" : { "Ref" : "PublicSubnet"}
+          }
+        },        
+        
+        "BastionVPCPeeringConnection": {
+            "Type": "AWS::EC2::VPCPeeringConnection",
+            "Properties" : {
+                "VpcId" : { "Ref" : "ToshiVPC" },
+                "PeerVpcId" : { "Ref" : "PeerVPC" }
+            }
+        },
+        
+        "ProHostedZone" : {
+            "Type" : "AWS::Route53::HostedZone",
+            "Properties" : {            
+                "Name" : { "Ref" : "DNSZone" },
+                "VPCs" : [ 
+                    {
+                      "VPCId": { "Ref" : "ToshiVPC" },
+                      "VPCRegion": { "Ref" : "AWS::Region" }
+                    }
+                ]
+            }
+        },
+        
+        "Microservices" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : "BastionVPCPeeringConnection",
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/microservice.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },                    
+                    "OperatorEMail" : { "Ref" : "OperatorEMail" },
+                    "MinInstances" : "1",
+                    "MaxInstances" : "1",                    
+                    "ToshiVPC" : { "Ref" : "ToshiVPC" },
+                    "SubnetCIDR" : "10.14.57.0/24",                    
+                    "NatGatewayId" : { "Ref" : "ToshiVPCNAT" },
+                    "BastionVPCPeeringConnection" : {"Ref": "BastionVPCPeeringConnection"},
+                    "RepositoryName" : { "Ref" : "RepositoryName" },
+                    "DNSZone" : { "Ref" : "DNSZone" } 
+                }
+            }
+        },
+      
+        "MongoCluster" : {
+            "Type" : "AWS::CloudFormation::Stack",
+            "DependsOn" : ["BastionVPCPeeringConnection", "ProHostedZone"],
+            "Properties" : {
+                "TemplateURL" : "https://s3.amazonaws.com/mongocloudcluster/mongo.cluster.json",
+                "Parameters" : {
+                    "KeyName" : { "Ref" : "KeyName" },
+                    "InstanceType" : { "Ref" : "InstanceType" },
+                    "MongoVolumeSize" : { "Ref" : "MongoVolumeSize" },                   
+                    "ToshiVPC" : { "Ref" : "ToshiVPC" },
+                    "SubnetCIDR" : "10.14.85.0/24",
+                    "NatGatewayId" : { "Ref" : "ToshiVPCNAT" },
+                    "BastionVPCPeeringConnection" : {"Ref": "BastionVPCPeeringConnection"},
+                    "DNSZone" : { "Ref" : "DNSZone" }                                        
+                }
+            }
+        }
+
+    },
+
+    "Outputs" : {
+
+    }
+}
